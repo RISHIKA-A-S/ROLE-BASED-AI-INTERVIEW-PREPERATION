@@ -12,7 +12,6 @@
 - **Session management** — create, view, and delete practice sessions from a dashboard; each session remembers its role, topics, experience level, and question set.
 - **Practice streak tracking** — a GitHub-style contribution heatmap on the profile page visualizes daily practice activity, with current-streak and longest-streak stats computed from real session history.
 - **Authentication** — JWT-based signup/login with profile picture upload.
-- **Resilient AI generation** — question generation is batched and automatically retries incomplete/truncated responses, so large requests don't silently fail (see [Notable Engineering Details](#notable-engineering-details)).
 
 ---
 
@@ -108,18 +107,8 @@ Create a `.env` file in `backend/`:
 PORT=8000
 MONGO_URI=your_mongodb_connection_string
 JWT_SECRET=your_jwt_secret
+API_KEY=your_api_key
 
-# AI provider — "groq" (default) or "together"
-AI_PROVIDER=groq
-
-GROQ_API_KEY=your_groq_api_key
-GROQ_API_URL=https://api.groq.com/openai/v1/chat/completions
-GROQ_MODEL=llama-3.3-70b-versatile
-
-# Optional fallback provider
-TOGETHER_API_KEY=your_together_api_key
-TOGETHER_API_URL=https://api.together.ai/v1/chat/completions
-TOGETHER_MODEL=meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo
 ```
 
 Run the server:
@@ -147,38 +136,6 @@ Run the dev server:
 npm run dev
 ```
 
----
-
-## API Reference
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| POST | `/api/auth/register` | Create a new account | No |
-| POST | `/api/auth/login` | Authenticate and receive a JWT | No |
-| GET | `/api/auth/profile` | Get the logged-in user's profile | Yes |
-| PUT | `/api/auth/profile` | Update display name / profile image | Yes |
-| POST | `/api/auth/upload-image` | Upload a profile picture | Yes |
-| POST | `/api/ai/generate-questions` | Generate a batch of interview Q&A pairs | Yes |
-| POST | `/api/ai/generate-explanation` | Generate a detailed explanation for a question | Yes |
-| POST | `/api/sessions/create` | Create a new practice session | Yes |
-| GET | `/api/sessions/my-sessions` | List all sessions for the logged-in user | Yes |
-| GET | `/api/sessions/:id` | Get a session with its questions | Yes |
-| DELETE | `/api/sessions/:id` | Delete a session and its questions | Yes |
-| POST | `/api/questions/add` | Add more questions to an existing session | Yes |
-| POST | `/api/questions/:id/pin` | Pin or unpin a question | Yes |
-| POST | `/api/questions/:id/note` | Add/update a note on a question | Yes |
-
----
-
-## Notable Engineering Details
-
-LLM responses are inherently unreliable to parse as structured data, so `aiController.js` includes several layers of defense rather than assuming the model always returns clean JSON:
-
-- **Batched question generation** — instead of asking for all N questions in a single completion (which risks truncation on longer requests), questions are generated in small batches of 4, run in parallel, and merged. A batch that comes back incomplete is automatically retried once before being counted as failed, and the endpoint still returns successfully as long as at least one batch succeeded.
-- **JSON-mode enforcement** — requests to Groq use `response_format: { type: "json_object" }` so the model is constrained to emit syntactically valid JSON rather than relying on prompt instructions alone.
-- **Control-character sanitization** — LLMs frequently "pretty-print" string values with real line breaks instead of escaping them as `\n`, which is invalid JSON even though brackets stay balanced. A dedicated sanitizer walks the raw text and escapes stray newlines/tabs found specifically inside string literals before parsing.
-- **Completeness validation** — a successfully-parsed batch is still rejected (and retried) if its question/answer pairs are suspiciously short, since JSON-repair tools can sometimes "fix" a truncated response into technically valid but semantically empty JSON.
-- **`jsonrepair` fallback** — as a last resort, the `jsonrepair` package attempts to recover from trailing commas or minor structural issues before the request is given up on.
 
 ---
 
