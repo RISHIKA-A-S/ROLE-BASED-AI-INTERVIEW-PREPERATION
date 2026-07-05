@@ -92,7 +92,7 @@ AI-Powered-Interview-Prep-App/
 ### Prerequisites
 - Node.js 18+
 - A MongoDB connection string (local or Atlas)
-- A [Groq](https://console.groq.com) API key (or a [Together AI](https://www.together.ai) key as a fallback provider)
+- API key 
 
 ### Backend Setup
 
